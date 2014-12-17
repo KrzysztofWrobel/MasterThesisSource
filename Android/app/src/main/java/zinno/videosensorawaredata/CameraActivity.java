@@ -13,6 +13,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.opengl.Matrix;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -204,7 +205,9 @@ public class CameraActivity extends Activity implements SensorEventListener {
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mOrientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         mLinearAcceleration = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-        mStepCounter = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            mStepCounter = mSensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
+        }
 
         mHandler = new Handler();
     }
@@ -220,7 +223,9 @@ public class CameraActivity extends Activity implements SensorEventListener {
         super.onResume();
         mSensorManager.registerListener(this, mOrientation, SensorManager.SENSOR_DELAY_GAME);
         mSensorManager.registerListener(this, mLinearAcceleration, SensorManager.SENSOR_DELAY_GAME);
-        mSensorManager.registerListener(this, mStepCounter, SensorManager.SENSOR_DELAY_FASTEST);
+        if (mStepCounter != null) {
+            mSensorManager.registerListener(this, mStepCounter, SensorManager.SENSOR_DELAY_FASTEST);
+        }
     }
 
     @Override
@@ -390,9 +395,9 @@ public class CameraActivity extends Activity implements SensorEventListener {
                     currentGlobalVelocity[1] /= velocity / WALKING_MAX_VELOCITY;
                     currentGlobalVelocity[2] /= velocity / WALKING_MAX_VELOCITY;
                 }
-                currentRelativePosition[0] += currentGlobalVelocity[0] * dT + currentGlobalAcceleration[0] * dT * dT/2; // s = V0 * t + a * t^2/2a
-                currentRelativePosition[1] += currentGlobalVelocity[1] * dT + currentGlobalAcceleration[2] * dT * dT/2;
-                currentRelativePosition[2] += currentGlobalVelocity[2] * dT + + currentGlobalAcceleration[1] * dT * dT/2;
+                currentRelativePosition[0] += currentGlobalVelocity[0] * dT + currentGlobalAcceleration[0] * dT * dT / 2; // s = V0 * t + a * t^2/2a
+                currentRelativePosition[1] += currentGlobalVelocity[1] * dT + currentGlobalAcceleration[2] * dT * dT / 2;
+                currentRelativePosition[2] += currentGlobalVelocity[2] * dT + +currentGlobalAcceleration[1] * dT * dT / 2;
             }
 
 
