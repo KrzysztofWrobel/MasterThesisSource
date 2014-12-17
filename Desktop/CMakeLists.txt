@@ -44,6 +44,3 @@ add_subdirectory(src/four-point-numerical)
 add_subdirectory(src/four-point-groebner)
 add_subdirectory(src/five-point-nister)
 add_subdirectory(src/one-point)
-
-add_executable(demo src/demo.cpp)
-target_link_libraries(demo five-point-nister four-point-numerical four-point-groebner ${OpenCV_LIBS})
