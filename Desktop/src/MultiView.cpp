@@ -16,7 +16,6 @@ using namespace cv;
 
 static const int MAX_ITERS = 20;
 
-
 void getEpipols(Mat &F, Mat &e1, Mat &e2) {
 
     SVD svd(F, SVD::FULL_UV);
@@ -181,8 +180,7 @@ bool FindPoseEstimation(
         cv::Mat &distCoeffs,
         std::vector<cv::Point3d> ppcloud,
         std::vector<cv::Point2d> imgPoints,
-        vector<int> inliers)
-{
+        vector<int> inliers) {
     if (ppcloud.size() <= 7 || imgPoints.size() <= 7 || ppcloud.size() != imgPoints.size()) {
         //something went wrong aligning 3D to 2D points..
         cerr << "couldn't find [enough] corresponding cloud points... (only " << ppcloud.size() << ")" << endl;
@@ -222,7 +220,7 @@ bool FindPoseEstimation(
 //		return false;
 //	}
 
-    std::cout << "found t = " << t << "\nR = \n" << R << std::endl;
+//    std::cout << "found t = " << t << "\nR = \n" << R << std::endl;
 
     return true;
 }
@@ -237,8 +235,7 @@ bool FindPoseEstimationEnhanced(
         cv::Mat &distCoeffs,
         std::vector<cv::Point3d> ppcloud,
         std::vector<cv::Point2d> imgPoints,
-        vector<int> inliers)
-{
+        vector<int> inliers) {
     if (ppcloud.size() <= 7 || imgPoints.size() <= 7 || ppcloud.size() != imgPoints.size()) {
         //something went wrong aligning 3D to 2D points..
         cerr << "couldn't find [enough] corresponding cloud points... (only " << ppcloud.size() << ")" << endl;
@@ -281,32 +278,32 @@ bool FindPoseEstimationEnhanced(
 //		return false;
 //	}
 
-    std::cout << "found t = " << t << "\nR = \n" << R << std::endl;
+//    std::cout << "found t = " << t << "\nR = \n" << R << std::endl;
 
     return true;
 }
 
-bool decideProperMatrix(Mat dRot, double tolerance){
-    double a00 = abs(dRot.at<double>(0,0) - 1);
-    double a11 = abs(dRot.at<double>(1,1) - 1);
-    double a22 = abs(dRot.at<double>(2,2) - 1);
-    if((a00 + a11 + a22)/3< tolerance) {
+bool decideProperMatrix(Mat dRot, double tolerance) {
+    double a00 = abs(dRot.at<double>(0, 0) - 1);
+    double a11 = abs(dRot.at<double>(1, 1) - 1);
+    double a22 = abs(dRot.at<double>(2, 2) - 1);
+    if ((a00 + a11 + a22) / 3 < tolerance) {
         return true;
-    }else {
+    } else {
         return false;
     }
 }
 
-Mat constraintMatrix(Mat dR){
-    Mat constDR = Mat::eye(3,3, CV_64FC1);
-    double edgeVal = (dR.at<double>(0,0) + dR.at<double>(1,1) + dR.at<double>(2,2))/3;
-    Mat clone = dR.clone()/edgeVal;
-    constDR.at<double>(0,1) = (clone.at<double>(0,1) - clone.at<double>(1,0))/2;
-    constDR.at<double>(1,0) = (clone.at<double>(1,0) - clone.at<double>(0,1))/2;
-    constDR.at<double>(0,2) = (clone.at<double>(0,2) - clone.at<double>(2,0))/2;
-    constDR.at<double>(2,0) = (clone.at<double>(2,0) - clone.at<double>(0,2))/2;
-    constDR.at<double>(2,1) = (clone.at<double>(2,1) - clone.at<double>(1,2))/2;
-    constDR.at<double>(1,2) = (clone.at<double>(1,2) - clone.at<double>(2,1))/2;
+Mat constraintMatrix(Mat dR) {
+    Mat constDR = Mat::eye(3, 3, CV_64FC1);
+    double edgeVal = (dR.at<double>(0, 0) + dR.at<double>(1, 1) + dR.at<double>(2, 2)) / 3;
+    Mat clone = dR.clone() / edgeVal;
+    constDR.at<double>(0, 1) = (clone.at<double>(0, 1) - clone.at<double>(1, 0)) / 2;
+    constDR.at<double>(1, 0) = (clone.at<double>(1, 0) - clone.at<double>(0, 1)) / 2;
+    constDR.at<double>(0, 2) = (clone.at<double>(0, 2) - clone.at<double>(2, 0)) / 2;
+    constDR.at<double>(2, 0) = (clone.at<double>(2, 0) - clone.at<double>(0, 2)) / 2;
+    constDR.at<double>(2, 1) = (clone.at<double>(2, 1) - clone.at<double>(1, 2)) / 2;
+    constDR.at<double>(1, 2) = (clone.at<double>(1, 2) - clone.at<double>(2, 1)) / 2;
 
     return constDR;
 }
@@ -411,11 +408,11 @@ Mat findFundamentalEnhanced(vector<Point2d> &prev_points_raw, vector<Point2d> &n
 
     Mat TdRExp = Mat(3, 3, CV_64FC1);
     TdRExp = findFundamentalMat(points1Exp, points2Exp, fundEssenEstimationMethod, 0.006 * maxVal, 0.99, status); //threshold from [Snavely07 4.1]
-    cout << "TdRExp keeping " << countNonZero(status) << " / " << status.size() << endl;
+//    cout << "TdRExp keeping " << countNonZero(status) << " / " << status.size() << endl;
     TdRExp.convertTo(TdRExp, CV_64FC1);
     TdRExp /= TdRExp.at<double>(8);
 
-    cout << TdRExp << endl;
+//    cout << TdRExp << endl;
     SVD decomp(TdRExp, SVD::FULL_UV);
     Mat W1 = Mat(Matx33d(0, -1, 0,   //HZ 9.13
             1, 0, 0,
@@ -428,9 +425,16 @@ Mat findFundamentalEnhanced(vector<Point2d> &prev_points_raw, vector<Point2d> &n
     Mat dRx = decomp.u * W1 * decomp.vt; //HZ 9.19
     Mat dR1x = decomp.u * Winv2 * decomp.vt; //HZ 9.19
 
-    cout << "dRx" << dRx << endl;
-    cout << "dR1x" << dR1x << endl;
+//    cout << "dRx" << dRx << endl;
+//    cout << "dR1x" << dR1x << endl;
 
+    chooseProperMatrixFromEnhanced(dRx, dR1x, TdRExp, dR, T);
+
+
+    return TdRExp;
+}
+
+void chooseProperMatrixFromEnhanced(Mat &dRx, Mat &dR1x, Mat &TdRExp, Mat &dR, Mat &T) {
     dR = dRx;
     if (decideProperMatrix(dRx, 0.05)) {
         dR = constraintMatrix(dRx);
@@ -447,17 +451,14 @@ Mat findFundamentalEnhanced(vector<Point2d> &prev_points_raw, vector<Point2d> &n
     }
 
     Mat skewT = TdRExp * dR.inv();
-    cout << "skewT" << skewT << endl;
-    Mat tdecx = Mat(3,1, CV_64FC1);
-    tdecx.at<double>(0) = (skewT.at<double>(2,1) - skewT.at<double>(1,2))/2;
-    tdecx.at<double>(1) = (skewT.at<double>(0,2) - skewT.at<double>(2,0))/2;
-    tdecx.at<double>(2) = (skewT.at<double>(1,0) - skewT.at<double>(0,1))/2;
+//    cout << "skewT" << skewT << endl;
+    Mat tdecx = Mat(3, 1, CV_64FC1);
+    tdecx.at<double>(0) = (skewT.at<double>(2, 1) - skewT.at<double>(1, 2)) / 2;
+    tdecx.at<double>(1) = (skewT.at<double>(0, 2) - skewT.at<double>(2, 0)) / 2;
+    tdecx.at<double>(2) = (skewT.at<double>(1, 0) - skewT.at<double>(0, 1)) / 2;
     T = tdecx;
-    cout << "dR" << dR << endl;
-    cout << "tdecx" << tdecx << endl;
-
-
-    return TdRExp;
+//    cout << "dR" << dR << endl;
+//    cout << "tdecx" << tdecx << endl;
 }
 
 void chooseProperRAndTFromTriangulation(vector<Point2d> &prev_points_raw, vector<Point2d> &next_points_raw, Mat &K, Mat &distCoeffs, Mat &R1, Mat &R2, Mat &t1, Mat &t2, Mat &R, Mat &T) {
@@ -513,7 +514,7 @@ void chooseProperRAndTFromTriangulation(vector<Point2d> &prev_points_raw, vector
                     T = t2;
                     cout << "Test triangulate out: 4 - proper" << endl;
                 }
-            }else {
+            } else {
                 R = R2;
                 T = t1;
             }
@@ -530,12 +531,11 @@ void chooseProperRAndTFromTriangulation(vector<Point2d> &prev_points_raw, vector
 /**
 From "Triangulation", Hartley, R.I. and Sturm, P., Computer vision and image understanding, 1997
 */
-Mat_<double> LinearLSTriangulation(Point3d u,		//homogenous image point (u,v,1)
-        Matx34d P,		//camera 1 matrix
-        Point3d u1,		//homogenous image point in 2nd camera
-        Matx34d P1		//camera 2 matrix
-)
-{
+Mat_<double> LinearLSTriangulation(Point3d u,        //homogenous image point (u,v,1)
+        Matx34d P,        //camera 1 matrix
+        Point3d u1,        //homogenous image point in 2nd camera
+        Matx34d P1        //camera 2 matrix
+) {
 
     //build matrix A for homogenous equation system Ax = 0
     //assume X = (x,y,z,1), for Linear-LS method
@@ -553,18 +553,18 @@ Mat_<double> LinearLSTriangulation(Point3d u,		//homogenous image point (u,v,1)
     //	A(1) = u.y*P(2)-P(1);
     //	A(2) = u1.x*P1(2)-P1(0);
     //	A(3) = u1.y*P1(2)-P1(1);
-    Matx43d A(u.x*P(2,0)-P(0,0),	u.x*P(2,1)-P(0,1),		u.x*P(2,2)-P(0,2),
-            u.y*P(2,0)-P(1,0),	u.y*P(2,1)-P(1,1),		u.y*P(2,2)-P(1,2),
-            u1.x*P1(2,0)-P1(0,0), u1.x*P1(2,1)-P1(0,1),	u1.x*P1(2,2)-P1(0,2),
-            u1.y*P1(2,0)-P1(1,0), u1.y*P1(2,1)-P1(1,1),	u1.y*P1(2,2)-P1(1,2)
+    Matx43d A(u.x * P(2, 0) - P(0, 0), u.x * P(2, 1) - P(0, 1), u.x * P(2, 2) - P(0, 2),
+            u.y * P(2, 0) - P(1, 0), u.y * P(2, 1) - P(1, 1), u.y * P(2, 2) - P(1, 2),
+            u1.x * P1(2, 0) - P1(0, 0), u1.x * P1(2, 1) - P1(0, 1), u1.x * P1(2, 2) - P1(0, 2),
+            u1.y * P1(2, 0) - P1(1, 0), u1.y * P1(2, 1) - P1(1, 1), u1.y * P1(2, 2) - P1(1, 2)
     );
-    Matx41d B(-(u.x*P(2,3)	-P(0,3)),
-            -(u.y*P(2,3)	-P(1,3)),
-            -(u1.x*P1(2,3)	-P1(0,3)),
-            -(u1.y*P1(2,3)	-P1(1,3)));
+    Matx41d B(-(u.x * P(2, 3) - P(0, 3)),
+            -(u.y * P(2, 3) - P(1, 3)),
+            -(u1.x * P1(2, 3) - P1(0, 3)),
+            -(u1.y * P1(2, 3) - P1(1, 3)));
 
     Mat_<double> X;
-    solve(A,B,X,DECOMP_SVD);
+    solve(A, B, X, DECOMP_SVD);
 
     return X;
 }
@@ -573,41 +573,47 @@ Mat_<double> LinearLSTriangulation(Point3d u,		//homogenous image point (u,v,1)
 /**
 From "Triangulation", Hartley, R.I. and Sturm, P., Computer vision and image understanding, 1997
 */
-Mat_<double> IterativeLinearLSTriangulation(Point3d u,	//homogenous image point (u,v,1)
-        Matx34d P,			//camera 1 matrix
-        Point3d u1,			//homogenous image point in 2nd camera
-        Matx34d P1			//camera 2 matrix
+Mat_<double> IterativeLinearLSTriangulation(Point3d u,    //homogenous image point (u,v,1)
+        Matx34d P,            //camera 1 matrix
+        Point3d u1,            //homogenous image point in 2nd camera
+        Matx34d P1            //camera 2 matrix
 ) {
     double wi = 1, wi1 = 1;
-    Mat_<double> X(4,1);
-    for (int i=0; i<10; i++) { //Hartley suggests 10 iterations at most
-        Mat_<double> X_ = LinearLSTriangulation(u,P,u1,P1);
-        X(0) = X_(0); X(1) = X_(1); X(2) = X_(2); X(3) = 1.0;
+    Mat_<double> X(4, 1);
+    for (int i = 0; i < 10; i++) { //Hartley suggests 10 iterations at most
+        Mat_<double> X_ = LinearLSTriangulation(u, P, u1, P1);
+        X(0) = X_(0);
+        X(1) = X_(1);
+        X(2) = X_(2);
+        X(3) = 1.0;
 
         //recalculate weights
-        double p2x = Mat_<double>(Mat_<double>(P).row(2)*X)(0);
-        double p2x1 = Mat_<double>(Mat_<double>(P1).row(2)*X)(0);
+        double p2x = Mat_<double>(Mat_<double>(P).row(2) * X)(0);
+        double p2x1 = Mat_<double>(Mat_<double>(P1).row(2) * X)(0);
 
         //breaking point
-        if(fabsf(wi - p2x) <= EPSILON && fabsf(wi1 - p2x1) <= EPSILON) break;
+        if (fabsf(wi - p2x) <= EPSILON && fabsf(wi1 - p2x1) <= EPSILON) break;
 
         wi = p2x;
         wi1 = p2x1;
 
         //reweight equations and solve
-        Matx43d A((u.x*P(2,0)-P(0,0))/wi,		(u.x*P(2,1)-P(0,1))/wi,			(u.x*P(2,2)-P(0,2))/wi,
-                (u.y*P(2,0)-P(1,0))/wi,		(u.y*P(2,1)-P(1,1))/wi,			(u.y*P(2,2)-P(1,2))/wi,
-                (u1.x*P1(2,0)-P1(0,0))/wi1,	(u1.x*P1(2,1)-P1(0,1))/wi1,		(u1.x*P1(2,2)-P1(0,2))/wi1,
-                (u1.y*P1(2,0)-P1(1,0))/wi1,	(u1.y*P1(2,1)-P1(1,1))/wi1,		(u1.y*P1(2,2)-P1(1,2))/wi1
+        Matx43d A((u.x * P(2, 0) - P(0, 0)) / wi, (u.x * P(2, 1) - P(0, 1)) / wi, (u.x * P(2, 2) - P(0, 2)) / wi,
+                (u.y * P(2, 0) - P(1, 0)) / wi, (u.y * P(2, 1) - P(1, 1)) / wi, (u.y * P(2, 2) - P(1, 2)) / wi,
+                (u1.x * P1(2, 0) - P1(0, 0)) / wi1, (u1.x * P1(2, 1) - P1(0, 1)) / wi1, (u1.x * P1(2, 2) - P1(0, 2)) / wi1,
+                (u1.y * P1(2, 0) - P1(1, 0)) / wi1, (u1.y * P1(2, 1) - P1(1, 1)) / wi1, (u1.y * P1(2, 2) - P1(1, 2)) / wi1
         );
-        Mat_<double> B = (Mat_<double>(4,1) <<	  -(u.x*P(2,3)	-P(0,3))/wi,
-                -(u.y*P(2,3)	-P(1,3))/wi,
-                -(u1.x*P1(2,3)	-P1(0,3))/wi1,
-                -(u1.y*P1(2,3)	-P1(1,3))/wi1
+        Mat_<double> B = (Mat_<double>(4, 1) << -(u.x * P(2, 3) - P(0, 3)) / wi,
+                -(u.y * P(2, 3) - P(1, 3)) / wi,
+                -(u1.x * P1(2, 3) - P1(0, 3)) / wi1,
+                -(u1.y * P1(2, 3) - P1(1, 3)) / wi1
         );
 
-        solve(A,B,X_,DECOMP_SVD);
-        X(0) = X_(0); X(1) = X_(1); X(2) = X_(2); X(3) = 1.0;
+        solve(A, B, X_, DECOMP_SVD);
+        X(0) = X_(0);
+        X(1) = X_(1);
+        X(2) = X_(2);
+        X(3) = 1.0;
     }
     return X;
 }

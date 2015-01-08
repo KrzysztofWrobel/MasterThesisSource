@@ -76,6 +76,8 @@ template<typename T1, typename T2>
 static void drawEpipolarLines(const std::string &title, const cv::Matx<T1, 3, 3> F, const cv::Mat &img1, const cv::Mat &img2,
         const std::vector<cv::Point_<T2> > points1,
         const std::vector<cv::Point_<T2> > points2,
+        Mat& outIMG,
+        const cv::Rect& whereRegion,
         const float inlierDistance = -1) {
     CV_Assert(img1.size() == img2.size() && img1.type() == img2.type());
     cv::Mat outImg(img1.rows, img1.cols * 2, CV_8UC3);
@@ -129,6 +131,11 @@ static void drawEpipolarLines(const std::string &title, const cv::Matx<T1, 3, 3>
         cv::circle(outImg2, points2[i], 3, color, -1, CV_AA);
     }
     cv::imshow(title, outImg);
+    if (outIMG.type() == CV_8U) {
+        cv::cvtColor(outImg, outIMG(whereRegion), CV_GRAY2BGR);
+    } else {
+        outImg.copyTo(outIMG(whereRegion));
+    }
     cv::waitKey(1);
 }
 

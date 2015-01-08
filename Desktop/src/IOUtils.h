@@ -142,6 +142,8 @@ void getRelativeMatrixAndAngles(vector<ImageDesc> &imageDescriptions, int prevId
     pitchDiff = radians((pitch2 - pitch1));
     azimuthDiff = radians((azimuth2 - azimuth1));
 //TODO according to Android app bug we need to minus this one
+//    rollDiff = radians(-(roll2 - roll1));
+//    rotDiffGlobal = getRotated3DMatrix<double>(pitchDiff, azimuthDiff, rollDiff);
     rollDiff = radians(-(roll2 - roll1));
-    rotDiffGlobal = getRotated3DMatrix<double>(pitchDiff, azimuthDiff, rollDiff);
+    rotDiffGlobal = getRotation3DMatrix<double>(pitchDiff, azimuthDiff, rollDiff);
 }

@@ -7,6 +7,7 @@
 #include <exception>
 #include <sstream>
 #include <string>
+#include <boost/format.hpp>
 
 #include <opencv2/opencv.hpp>
 #include "opencv/cv.h"
@@ -53,8 +54,8 @@ int main(int argc, char **argv) {
     vector<Point2d> points2En;
     vector<Point2d> points1Essen;
     vector<Point2d> points2Essen;
-    vector<Point2d> points1EssenExp;
-    vector<Point2d> points2EssenExp;
+    vector<Point3d> points1EssenExp;
+    vector<Point3d> points2EssenExp;
     vector<Point2d> points1St;
     vector<Point2d> points2St;
 
@@ -62,6 +63,8 @@ int main(int argc, char **argv) {
     vector<Point2d> next_points_raw;
 
     Mat K, distCoeffs;
+    double timeF, timeFEn, time3point,timeEssen, timeEssenEn, timeNone;
+    std::chrono::high_resolution_clock::time_point tStart, tEnd;
 
     cv::FileStorage fs;
     fs.open("out_camera_data.yml", cv::FileStorage::READ);
@@ -70,17 +73,6 @@ int main(int argc, char **argv) {
     K.convertTo(K, CV_64FC1);
     distCoeffs.convertTo(distCoeffs, CV_64FC1);
     cout << K << endl;
-//    Loaded camera matrix: [6552.2197265625, 0, 639.5;
-//    0, 6552.2197265625, 359.5;
-//    0, 0, 1]
-//    Loaded distortion coefficients: [-15.25522613525391; 5914.3701171875; 0; 0; 60.90658187866211]
-
-//    K.at<double>(0, 0) = 1280;
-//    K.at<double>(0, 1) = 0;
-//    K.at<double>(1, 1) = 1280;
-//    K.at<double>(0, 2) = 639.5;
-//    K.at<double>(1, 2) = 359.5;
-//    distCoeffs = NULL;
     cout << K << endl;
 
     std::vector<ImageDesc> imageDescriptions;
@@ -110,7 +102,7 @@ int main(int argc, char **argv) {
 
 #ifdef TIME_DEBUG
     std::chrono::high_resolution_clock::time_point tMatchesEnd = std::chrono::high_resolution_clock::now();
-    double durationMatches = std::chrono::duration_cast<std::chrono::milliseconds>(tMatchesEnd - tMatchesSt).count();
+    double durationMatches = std::chrono::duration_cast<std::chrono::microseconds>(tMatchesEnd - tMatchesSt).count();
     cout << "Matches Duration(ms): " << durationMatches << endl;
 #endif
 
@@ -127,8 +119,8 @@ int main(int argc, char **argv) {
     points2Essen = next_points_raw;
     points1St = prev_points_raw;
     points2St = next_points_raw;
-    points1EssenExp = prev_points_raw;
-    points2EssenExp = next_points_raw;
+    convertPointsToHomogeneous(prev_points_raw, points1EssenExp);
+    convertPointsToHomogeneous(next_points_raw, points2EssenExp);
 
 
     double minVal1, maxVal1;
@@ -137,7 +129,13 @@ int main(int argc, char **argv) {
 //    FindFundamentalOpenCVEnhanced
     Mat dR;
     Mat TProp;
-    Mat TdRExp = findFundamentalEnhanced(prev_points_raw, next_points_raw, K, distCoeffs, fundEssenEstimationMethod, rotDiffGlobal, dR, TProp, status);
+    tStart = std::chrono::high_resolution_clock::now();
+    Mat TdRExp;
+    for(int i = 0; i < 100; i++) {
+        TdRExp = findFundamentalEnhanced(prev_points_raw, next_points_raw, K, distCoeffs, fundEssenEstimationMethod, rotDiffGlobal, dR, TProp, status);
+    }
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeFEn = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
 
     Mat points1ess5(points1Essen.size(), 3, CV_64FC1), points2ess5(points2Essen.size(), 3, CV_64FC1);
     for (int a = 0; a < points1Essen.size(); a++) {
@@ -150,11 +148,31 @@ int main(int argc, char **argv) {
     }
     CV_Assert(points1ess5.type() == CV_64FC1);
     cv::minMaxIdx(points1ess5, &minVal1, &maxVal1);
-    Mat EssentialReal = findEssentialMat(points1ess5, points2ess5, K.at<double>(0), Point2d(K.at<double>(0, 2), K.at<double>(1, 2)), fundEssenEstimationMethod, 0.99, 0.006 * maxVal1, status1); //threshold from [Snavely07 4.1]
 
-    Mat essential = findEssentialMatEnhanced(points1ess5, points2ess5, K, rotDiffGlobal ,fundEssenEstimationMethod, status1);
-
+    tStart = std::chrono::high_resolution_clock::now();
+    Mat EssentialReal;
+    for(int i = 0; i < 100; i++) {
+        EssentialReal = findEssentialMat(points1EssenExp, points2EssenExp, K.at<double>(0), Point2d(K.at<double>(0, 2), K.at<double>(1, 2)), fundEssenEstimationMethod, 0.99, 0.006 * maxVal1, status1); //threshold from [Snavely07 4.1]
+    }
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeEssen = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
     cout << "essential keeping " << countNonZero(status1) << " / " << status1.size() << endl;
+    for (int i = status1.size() - 1; i >= 0; i--) {
+        if (!status1[i]) {
+            points1EssenExp.erase(points1EssenExp.begin() + i);
+            points2EssenExp.erase(points2EssenExp.begin() + i);
+        }
+    }
+
+    tStart = std::chrono::high_resolution_clock::now();
+    Mat essentialMatEnhanced;
+    for(int i = 0; i < 100; i++) {
+        essentialMatEnhanced = findEssentialMatEnhanced(points1ess5, points2ess5, K, rotDiffGlobal, fundEssenEstimationMethod, status1);
+    }
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeEssenEn = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
+
+    cout << "essential enhanced keeping " << countNonZero(status1) << " / " << status1.size() << endl;
     for (int i = status1.size() - 1; i >= 0; i--) {
         if (!status1[i]) {
             points1Essen.erase(points1Essen.begin() + i);
@@ -164,15 +182,21 @@ int main(int argc, char **argv) {
 
     double minVal, maxVal;
     cv::minMaxIdx(points1, &minVal, &maxVal);
-    std::chrono::high_resolution_clock::time_point ti1 = std::chrono::high_resolution_clock::now();
-    Mat F = findFundamentalMat(points1, points2, fundEssenEstimationMethod, 0.006 * maxVal, 0.99, status); //threshold from [Snavely07 4.1]
-    F.convertTo(F, CV_64FC1);
-    Mat E = K.t() * F * K;
 
-    Mat R, R1;
-    Mat t;
-    decomposeEssentialMat(E, R, R1, t);
-    Mat t1 = -t;
+    std::chrono::high_resolution_clock::time_point ti1 = std::chrono::high_resolution_clock::now();
+    tStart = std::chrono::high_resolution_clock::now();
+    Mat F;
+    for(int i = 0; i < 100; i++) {
+        F = findFundamentalMat(points1, points2, fundEssenEstimationMethod, 0.006 * maxVal, 0.99, status); //threshold from [Snavely07 4.1]
+        F.convertTo(F, CV_64FC1);
+        Mat E = K.t() * F * K;
+
+        Mat R, R1;
+        Mat t;
+        decomposeEssentialMat(E, R, R1, t);
+    }
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeF = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
 
     std::chrono::high_resolution_clock::time_point ti2 = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration_cast<std::chrono::microseconds>(ti2 - ti1).count();
@@ -192,18 +216,20 @@ int main(int argc, char **argv) {
     imshow("Good Matches", img_matches);
 
 
-
     Mat FEnhanced;
     Mat tEnhanced;
     uchar *goodStatuses;
 
-
-
-    std::chrono::high_resolution_clock::time_point tRansacEnStart = std::chrono::high_resolution_clock::now();
-    getTranslationWithKnownRotation(prev_points_raw, next_points_raw, K, rotDiffGlobal, FEnhanced, tEnhanced, goodStatuses);
-    std::chrono::high_resolution_clock::time_point tRansacEnEnd = std::chrono::high_resolution_clock::now();
-    double durationRansacEn = std::chrono::duration_cast<std::chrono::microseconds>(tRansacEnEnd - tRansacEnStart).count();
-    cout << "Duration ransac enhanced: " << durationRansacEn << endl;
+    tStart = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < 100; i++) {
+        std::chrono::high_resolution_clock::time_point tRansacEnStart = std::chrono::high_resolution_clock::now();
+        getTranslationWithKnownRotation(prev_points_raw, next_points_raw, K, rotDiffGlobal, FEnhanced, tEnhanced, goodStatuses);
+        std::chrono::high_resolution_clock::time_point tRansacEnEnd = std::chrono::high_resolution_clock::now();
+        double durationRansacEn = std::chrono::duration_cast<std::chrono::microseconds>(tRansacEnEnd - tRansacEnStart).count();
+    }
+//    cout << "Duration ransac enhanced: " << durationRansacEn << endl;
+    tEnd = std::chrono::high_resolution_clock::now();
+    time3point = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
 
     //Correction check
 //    Mat corrRotDiffGlobal = dR * rotDiffGlobal;
@@ -219,9 +245,13 @@ int main(int argc, char **argv) {
     Mat FStandard;
     Mat tStandard;
 
+    tStart = std::chrono::high_resolution_clock::now();
     std::chrono::high_resolution_clock::time_point tRansacStart = std::chrono::high_resolution_clock::now();
-    findFundamentalStandard(prev_points_raw, next_points_raw, FStandard, goodStatuses);
-
+    for(int i = 0; i < 100; i++) {
+        findFundamentalStandard(prev_points_raw, next_points_raw, FStandard, goodStatuses);
+    }
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeF = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
 //    Mat EStd = K.t() * FStandard * K;
 //    Mat Rx, R1x, tx;
 //    decomposeEssentialMat(EStd, Rx, R1x, tx);
@@ -238,7 +268,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    Mat FEssential = K.inv().t() * (essential * rotDiffGlobal) * K.inv();
+    Mat FEssential = K.inv().t() * (essentialMatEnhanced * rotDiffGlobal) * K.inv();
     FEssential = FEssential / FEssential.at<double>(8);
 
     Mat FEssentialNor = K.inv().t() * (EssentialReal) * K.inv();
@@ -248,27 +278,66 @@ int main(int argc, char **argv) {
     Mat FdR = K.inv().t() * (TdRExp * rotDiffGlobal) * K.inv();
     FdR = FdR / FdR.at<double>(8);
 
+    tStart = std::chrono::high_resolution_clock::now();
+    Mat Treal = Mat(3, 1, CV_64FC1);
+    Treal.at<double>(0) = (imageDescriptions[nextIdx].globalPosX - imageDescriptions[prevIdx].globalPosX);
+    Treal.at<double>(1) = (imageDescriptions[nextIdx].globalPosY - imageDescriptions[prevIdx].globalPosY);
+    Treal.at<double>(2) = (imageDescriptions[nextIdx].globalPosZ - imageDescriptions[prevIdx].globalPosZ);
+//    Treal = -rotDiffGlobal * Treal;
+    Mat FReal = K.inv().t() * (makeSkewMatrix(Treal) * rotDiffGlobal) * K.inv();
+    FReal = FReal / FReal.at<double>(8);
+    tEnd = std::chrono::high_resolution_clock::now();
+    timeNone = std::chrono::duration_cast<std::chrono::microseconds>(tEnd - tStart).count();
 
-    float test = 0, test1 = 0, test2 = 0, test3 = 0, test6 = 0;
+    //TODO none estimation
+    float test = 0, test1 = 0, test2 = 0, test3 = 0, test4 = 0, test6 = 0;
     for (int i = 0; i < points1.size(); i++) {
         test += sampson_error((double *) F.data, points1[i].x, points1[i].y, points2[i].x, points2[i].y);
+//        test1 += sampson_error((double *) FStandard.data, points1St[i].x, points1St[i].y, points2St[i].x, points2St[i].y);
+        test1 += sampson_error((double *) FReal.data, points1[i].x, points1[i].y, points2[i].x, points2[i].y);
         test1 += sampson_error((double *) FStandard.data, points1St[i].x, points1St[i].y, points2St[i].x, points2St[i].y);
-        test2 += sampson_error((double *) FEssential.data, points1[i].x, points1[i].y, points2[i].x, points2[i].y);
         test3 += sampson_error((double *) FEnhanced.data, points1En[i].x, points1En[i].y, points2En[i].x, points2En[i].y);
         test6 += sampson_error((double *) FdR.data, points1[i].x, points1[i].y, points2[i].x, points2[i].y);
+        test2 += sampson_error((double *) FEssential.data, points1Essen[i].x, points1Essen[i].y, points2Essen[i].x, points2Essen[i].y);
+        test4 += sampson_error((double *) FEssentialNor.data, points1Essen[i].x, points1Essen[i].y, points2Essen[i].x, points2Essen[i].y);
     }
-    cout << "Test ransac from OpenCv: " << test / points1.size() << endl;
-    cout << "Test 8-point own ransac: " << test1 / points1St.size() << endl;
-    cout << "Test ransac essential: " << test2 / points1Essen.size() << endl;
-    cout << "Test enhanced: " << test3 / points1En.size() << endl;
-    cout << "Test FdR: " << test6 / points1.size() << endl;
+    cout << "Test ransac from OpenCv: " << test << endl;
+    cout << "Test enhanced: " << test3 << endl;
+    cout << "Test FdR: " << test6 << endl;
+    cout << "Test known rotation and trans: " << test1 << endl;
+    cout << "Test ransac essential: " << test2 << endl;
+    cout << "Test ransac essentialEnhanced: " << test4 << endl;
 
-    drawEpipolarLines<double, double>("Epipolars OpenCV", F, prev_frame, next_frame, points1, points2, -1);
-    drawEpipolarLines<double, double>("Epipolars Standard", FStandard, prev_frame, next_frame, points1St, points2St, -1);
-    drawEpipolarLines<double, double>("Epipolars Enhanced", FEnhanced, prev_frame, next_frame, points1En, points2En, -1);
-    drawEpipolarLines<double, double>("Epipolars Fdr - ENhanced", FdR, prev_frame, next_frame, points1, points2, -1);
-    drawEpipolarLines<double, double>("Epipolars Essential", FEssentialNor, prev_frame, next_frame, points1Essen, points2Essen, -1);
-    drawEpipolarLines<double, double>("Epipolars Essential Enhanced", FEssential, prev_frame, next_frame, points1Essen, points2Essen, -1);
+    cout << "Test ransac from OpenCv(per point): " << test / points1.size() << " for " << points1.size() << " points" << endl;
+    cout << "Test enhanced(per point): " << test3 / points1En.size() << " for " << points1En.size() << " points" << endl;
+    cout << "Test FdR(per point): " << test6 / points1.size() << " for " << points1.size() << " points" << endl;
+    cout << "Test known rotation and trans(per point): " << test1 / points1St.size() << " for " << points1St.size() << " points" << endl;
+    cout << "Test ransac essential(per point): " << test2 / points1Essen.size() << "for " << points1Essen.size() << " points" << endl;
+    cout << "Test ransac essentialEnhanced(per point): " << test4 / points1Essen.size() << " for " << points1Essen.size() << " points" << endl;
+
+
+    cout << boost::format("Test ransac from OpenCv: %.2f") % (timeF/1000) << endl;
+    cout << boost::format("Test enhanced: %.2f") % (timeFEn/1000) << endl;
+    cout << boost::format("Test FdR: %.2f") % (time3point/1000) << endl;
+    cout << boost::format("Test known rotations: %.2f") %  (timeNone/1000) << endl;
+    cout << boost::format("Test ransac essential: %.2f") % (timeEssen/1000) << endl;
+    cout << boost::format("Test ransac essentialEnhanced: %.2f") % (timeEssenEn/1000) << endl;
+
+    int cols = prev_frame.cols;
+    int rows = prev_frame.rows;
+    cv::Mat outImg1(rows * 3, cols * 2, CV_8UC3);
+    cv::Mat outImg2(rows * 3, cols * 2, CV_8UC3);
+
+
+    drawEpipolarLines<double, double>("Epipolars OpenCV", F, prev_frame, next_frame, points1, points2, outImg1, Rect(0, 0, 2*cols, rows), -1);
+//    drawEpipolarLines<double, double>("Epipolars Standard", FStandard, prev_frame, next_frame, points1St, points2St, outImg, Rect(2*cols, 0,  4 * cols, rows), -1);
+    drawEpipolarLines<double, double>("Epipolars Fdr - ENhanced", FdR, prev_frame, next_frame, points1, points2, outImg1, Rect(0, rows, 2 * cols, rows), -1);
+    drawEpipolarLines<double, double>("Epipolars Enhanced", FEnhanced, prev_frame, next_frame, points1En, points2En, outImg1, Rect(0, 2* rows,2* cols, rows), -1);
+    drawEpipolarLines<double, double>("Epipolars Real", FReal, prev_frame, next_frame, points1, points2, outImg2, Rect(0, 0,  2 * cols, rows), -1);
+    drawEpipolarLines<double, double>("Epipolars Essential", FEssentialNor, prev_frame, next_frame, points1Essen, points2Essen, outImg2, Rect(0, rows, 2*cols, rows), -1);
+    drawEpipolarLines<double, double>("Epipolars Essential Enhanced", FEssential, prev_frame, next_frame, points1Essen, points2Essen, outImg2, Rect(0, 2 * rows, 2* cols, rows) ,- 1);
+    imwrite("Summary1.jpg", outImg1);
+    imwrite("Summary2.jpg", outImg2);
 
     if (waitKey(300000)) {
         return 0;

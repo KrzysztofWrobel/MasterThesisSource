@@ -23,6 +23,12 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/surface/mls.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/surface/gp3.h>
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/surface/marching_cubes_rbf.h>
 
 #endif
 
@@ -42,6 +48,7 @@
 
 using namespace std;
 using namespace cv;
+using namespace pcl;
 
 enum INIT_METHOD {
     FUNDAMENTAL = 0,
@@ -81,29 +88,36 @@ int main(int argc, char **argv) {
     cin >> SIFT_FEATURES;
 
     cout << "Please choose Init Reconstruct Method:\n"
-            "    0 - Fundamental,\n"
-            "    1 - FUNDAMENTAL_ENHENCED,\n"
-            "    2 - ESSENTIAL,\n"
-            "    3 - ESSENTIAL_ENHANCED,\n"
-            "    4 - TRANSLATION_ESTIM,\n"
-            "    5 - NONE_INIT\n";
+            "    0 - Fundamental(8-point),\n"
+            "    1 - Fundamental Rotation Enhanced(8 point),\n"
+            "    2 - Essential(5-point),\n"
+            "    3 - Essential Rotation Enhanced(5-point),\n"
+            "    4 - Alternative 3-point translation,\n"
+            "    5 - Use known rotation and translation\n";
 
     int method = FUNDAMENTAL;
     std::cin >> method;
     INIT_METHOD init_method = static_cast<INIT_METHOD>( method );
 
     cout << "Please choose Pose Estimation Method:\n"
-            "    0 - NORMAL,\n"
-            "    1 - NORMAL_ENHENCED,\n"
-            "    2 - TRANSLATION_POSE,\n"
-            "    3 - NONE_POSE\n";
+            "    0 - Standard OpenCv Pose Estimation,\n"
+            "    1 - Rotation enhanced Pose Estimation,\n"
+            "    2 - Rotation and Translation enhanced Pose Estimation,\n"
+            "    3 - Use know rotations\n";
     int poseMethod = NORMAL;
     std::cin >> poseMethod;
     POSE_ESTIM_METHOD estim_method = static_cast<POSE_ESTIM_METHOD>( poseMethod );
 
     //TODO ask for outliers
+    cout << "Remove Pose Outliers(type 1 for yes, 0 for no)\n";
+    int remPoseOutlie = 1;
+    std::cin >> remPoseOutlie;
     bool removeOutliers = true;
-    bool removeOutliersPose = true;
+    bool removeOutliersPose = remPoseOutlie;
+    cout << "Use Bundle Adjustment(type 1 for yes, 0 for no)\n";
+    int useBundleAdj = 1;
+    std::cin >> useBundleAdj;
+    bool useBundleAdjustment = useBundleAdj;
 
     std::vector<cv::Mat> images;
     std::vector<cv::Mat> cameraKMatrix;
@@ -115,6 +129,7 @@ int main(int argc, char **argv) {
 
     Mat K, distCoeffs;
     std::vector<ImageDesc> imageDescriptions;
+    //TODO ask for sensor files and camera matrix file
     char const *sensorDataFilename = "sensor.txt";
     char const *cameraIntersincFilename = "out_camera_data.yml";
 
@@ -141,8 +156,8 @@ int main(int argc, char **argv) {
 
     int startIdx = 0;
     int endIdx = imageCount - 1;
-    int prevIdx = 0;
-    int nextIdx = 1;
+    int prevIdx = startIdx;
+    int nextIdx = startIdx+1;
 
     cvtColor(images[prevIdx], prev_frame, CV_RGB2GRAY);
     GaussianBlur(prev_frame, prev_frame, Size(3, 3), 1.5, 1.5);
@@ -165,7 +180,7 @@ int main(int argc, char **argv) {
     Mat R1, R2;
     Mat t1, t2;
     double minVal, maxVal;
-    cout << "initMethod" << endl;
+//    cout << "initMethod" << endl;
     switch (init_method) {
         case FUNDAMENTAL: {
             cv::minMaxIdx(prev_points_raw, &minVal, &maxVal);
@@ -226,10 +241,14 @@ int main(int argc, char **argv) {
             Mat EssentialEnhanced = findEssentialMatEnhanced(points1ess5en, points2ess5en, K, rotDiffGlobal, fundEssenEstimationMethod, status);
 
             decomposeEssentialMat(EssentialEnhanced, R1, R2, t1);
-            R1 = R1 * rotDiffGlobal;
-            R2 = R2 * rotDiffGlobal;
+            //TODO decide which rotation to use chooseProperMatrixFromEnhanced(R1,R2,)
+            Mat dR, Tprop;
+            chooseProperMatrixFromEnhanced(R1, R2, EssentialEnhanced, dR, Tprop);
+            R1 = dR * rotDiffGlobal;
+            R1 = dR * rotDiffGlobal;
+            t1 = Tprop;
             t2 = -t1;
-            chooseProperRAndTFromTriangulation(prev_points_raw, next_points_raw, K, distCoeffs, R1, R2, t1, t2, R, T);
+            chooseProperRAndTFromTriangulation(prev_points_raw, next_points_raw, K, distCoeffs, R2, R1, t1, t2, R, T);
             break;
         };
         case TRANSLATION_ESTIM: {
@@ -257,12 +276,17 @@ int main(int argc, char **argv) {
             T.at<double>(0) = imageDescriptions[nextIdx].globalPosX;
             T.at<double>(1) = imageDescriptions[nextIdx].globalPosY;
             T.at<double>(2) = imageDescriptions[nextIdx].globalPosZ;
+            T = -rotDiffGlobal * T;
             break;
         };
     }
     std::chrono::high_resolution_clock::time_point tInitEnd = std::chrono::high_resolution_clock::now();
     double durationInit = std::chrono::duration_cast<std::chrono::microseconds>(tInitEnd - tInitStart).count();
     cout << "Duration init reconstruct: " << durationInit << endl;
+
+    Mat img_matchesb;
+    drawMatches(prev_frame, prev_keypoints, next_frame, next_keypoints, good_matches, img_matchesb, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+    imwrite("GoodMatchesBefore.jpg", img_matchesb);
 
     if (removeOutliers) {
         cout << "Keeping " << countNonZero(status) << " / " << status.size() << endl;
@@ -278,7 +302,7 @@ int main(int argc, char **argv) {
 
     Mat img_matches;
     drawMatches(prev_frame, prev_keypoints, next_frame, next_keypoints, good_matches, img_matches, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-    imshow("Good MatchesInit", img_matches);
+    imwrite("GoodMatchesAfter.jpg", img_matchesb);
 
     Matx34d P1, P2;
     P1 = Matx34d::eye();
@@ -287,7 +311,7 @@ int main(int argc, char **argv) {
             R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2), T.at<double>(2));
 
     vector<Point2d> points1StUD, points2StUD;
-    cout << "Undistort!" << endl;
+//    cout << "Undistort!" << endl;
     undistortPoints(prev_points_raw, points1StUD, K, distCoeffs);
     undistortPoints(next_points_raw, points2StUD, K, distCoeffs);
 
@@ -302,7 +326,7 @@ int main(int argc, char **argv) {
     convertPointsFromHomogeneous(reconstructTransposed, reconstructCloudVec);
     convertPointsFromHomogeneous(reconstructTransposed, xp_p);
     reshape.push_back(Mat(reconstructTransposed));
-    cout << reshape << endl;
+//    cout << reshape << endl;
     vector<vector<int> >img_pt_matches;
     vector<vector<Point2d> >img_pt_matches_pts;
     
@@ -359,7 +383,7 @@ int main(int argc, char **argv) {
 
         //TODO eliminate outliers
 
-        cout << "begin:" << endl;
+//        cout << "begin:" << endl;
         vector<Point3d> temp3D;
         vector<Point2d> temp2D;
         vector<int> inliers;
@@ -373,7 +397,7 @@ int main(int argc, char **argv) {
                     temp3D.push_back(reconstructCloudVec[pt3d]);
                     Point2f point2f = next_keypoints[good_matches[i].trainIdx].pt;
                     temp2D.push_back(Point2d(point2f.x, point2f.y));
-                    cout << "prevCloudKeypoints[i]: " << good_matches[i].queryIdx << " good_matches[j].trainIdx: " << good_matches[i].trainIdx << endl;
+//                    cout << "prevCloudKeypoints[i]: " << good_matches[i].queryIdx << " good_matches[j].trainIdx: " << good_matches[i].trainIdx << endl;
                     found = true;
                     break;
                 }
@@ -443,8 +467,8 @@ int main(int argc, char **argv) {
         Mat xpreshape = XP.t();
         convertPointsFromHomogeneous(xpreshape, xp_p);
 
-        cout << R << endl;
-        cout << T << endl;
+//        cout << R << endl;
+//        cout << T << endl;
 
         //Filter estimated points from new and outliers, we should think about updating xp_p points also probably, because it can correlete in between outliers pairs
         if(removeOutliersPose) {
@@ -506,7 +530,7 @@ int main(int argc, char **argv) {
         prev_frame = next_frame.clone();
         prev_keypoints = vector<KeyPoint>(next_keypoints);
         prev_descriptors = next_descriptors.clone();
-        cout << reshape.rows << endl;
+//        cout << reshape.rows << endl;
 //        reconstructCloud.push_back(Mat(XP.t()));
 
         char buff[100];
@@ -529,13 +553,14 @@ int main(int argc, char **argv) {
 
     cout << "Bundle Adjustment" << endl;
     int M = reconstructCloudVec.size();
+//    int N = endIdx - startIdx;
     int N = imageCount;
 
     vector<vector<Point2d> > imagePoints(N,vector<Point2d>(M)); // projections of 3d points for every camera
     vector<vector<int> > visibility(N,vector<int>(M, 0)); // visibility of 3d points for every camera
 
     for (int pt3d = 0; pt3d < reconstructCloudVec.size(); pt3d++) {
-        for (int i = 0; i < imageCount; i++) {
+        for (int i = 0; i < N; i++) {
             imagePoints[i][pt3d] = img_pt_matches_pts[pt3d][i];
             if(img_pt_matches[pt3d][i] >= 0){
                 visibility[i][pt3d] = 1;
@@ -544,15 +569,24 @@ int main(int argc, char **argv) {
         }
     }
 
+    std::chrono::high_resolution_clock::time_point tFundEnhancedEnd = std::chrono::high_resolution_clock::now();
+    double tReconstruct = std::chrono::duration_cast<std::chrono::milliseconds>(tFundEnhancedEnd - tInitStart).count();
+    cout << "Reconstruction time Before BA(ms): " << tReconstruct << endl;
 //    cv::LevMarqSparse lms;
 //    lms.bundleAdjust(points_opt, imagePoints, visiblity, cameraMatrix, R_opt, T_opt, distCoeffs, criteria);
 /*Params ( TYPE t= MOTIONSTRUCTURE, int iters = 150,double minErr = 1e-10,
             int  fixedIntri =5,int  fixedDist = 5,bool Verbose=false )*/
-    cvsba::Sba sba;
-    cvsba::Sba::Params params = cvsba::Sba::Params ( cvsba::Sba::MOTIONSTRUCTURE, 150,1e-6,5,5,false );
-    sba.setParams(params);
-    sba.run(reconstructCloudVec,  imagePoints,  visibility,  cameraKMatrix,  R_opt,  T_opt, distCoeffsMatrix);
-    std::cout<<"Initial error="<<sba.getInitialReprjError()<<". Final error="<<sba.getFinalReprjError()<<std::endl;
+    if(useBundleAdjustment) {
+        cvsba::Sba sba;
+        cvsba::Sba::Params params = cvsba::Sba::Params(cvsba::Sba::MOTIONSTRUCTURE, 150, 1e-6, 5, 5, false);
+        sba.setParams(params);
+        sba.run(reconstructCloudVec, imagePoints, visibility, cameraKMatrix, R_opt, T_opt, distCoeffsMatrix);
+        std::cout << "BA Initial error=" << sba.getInitialReprjError() << ". Final error=" << sba.getFinalReprjError() << std::endl;
+    }
+
+    tFundEnhancedEnd = std::chrono::high_resolution_clock::now();
+    tReconstruct = std::chrono::duration_cast<std::chrono::milliseconds>(tFundEnhancedEnd - tInitStart).count();
+    cout << "Reconstruction time After BA(ms): " << tReconstruct << endl;
 
     Mat final = reshape.t();
     savePointList("projectiveReconstructionBeforeBA.asc", final);
@@ -564,7 +598,7 @@ int main(int argc, char **argv) {
     pcl::visualization::PCLVisualizer viewer("3D Viewer");
     viewer.setBackgroundColor(0, 0, 0);
 
-    for (int i = 0; i < imageCount; i++) {
+    for (int i = 0; i < N; i++) {
         cv::Mat Rw, Tw;
         Eigen::Matrix4f _t;
         Eigen::Affine3f t;
@@ -585,28 +619,118 @@ int main(int argc, char **argv) {
 
 
 // Fill in the true point data
-    pcl::PointCloud<pcl::PointXYZRGB> cloud_true;
-    cloud_true.width = prev_xp_p.size();
-    cloud_true.height = 1;
-    cloud_true.is_dense = false;
-    cloud_true.points.resize(cloud_true.width * cloud_true.height);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_true(new pcl::PointCloud<pcl::PointXYZ>);
+    cloud_true->width = reconstructCloudVec.size();
+    cloud_true->height = 1;
+    cloud_true->is_dense = false;
+    cloud_true->points.resize(cloud_true->width * cloud_true->height);
 
-    for (size_t i = 0; i < cloud_true.points.size(); ++i) {
-        cloud_true.points[i].x = prev_xp_p[i].x;
-        cloud_true.points[i].y = prev_xp_p[i].y;
-        cloud_true.points[i].z = prev_xp_p[i].z;
+    for (size_t i = 0; i < cloud_true->points.size(); ++i) {
+        cloud_true->points[i].x = reconstructCloudVec[i].x;
+        cloud_true->points[i].y = reconstructCloudVec[i].y;
+        cloud_true->points[i].z = reconstructCloudVec[i].z;
 //        cloud_true.points[i].r = images[prevIdx].at<Vec3b>(prev_points_raw[i]).val[0];
 //        cloud_true.points[i].g = images[prevIdx].at<Vec3b>(prev_points_raw[i]).val[1];
 //        cloud_true.points[i].b = images[prevIdx].at<Vec3b>(prev_points_raw[i]).val[2];
-        cloud_true.points[i].r = 255;
-        cloud_true.points[i].g = 255;
-        cloud_true.points[i].b = 255;
+//        cloud_true->points[i].r = 255;
+//        cloud_true->points[i].g = 255;
+//        cloud_true->points[i].b = 255;
     }
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> green(cloud_true.makeShared());
+//    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> green(cloud_true->makeShared());
+
+//    // Create a KD-Tree
+//    pcl::search::KdTree<pcl::PointXYZ>::Ptr treeMLS (new pcl::search::KdTree<pcl::PointXYZ>);
+//
+//    // Output has the PointNormal type in order to store the normals calculated by MLS
+//    pcl::PointCloud<pcl::PointNormal>::Ptr mls_points(new pcl::PointCloud<pcl::PointNormal>);
+//
+//    // Init object (second point type is for the normals, even if unused)
+//    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointNormal> mls;
+//
+//    mls.setComputeNormals (true);
+//
+//    // Set parameters
+//    mls.setInputCloud (cloud_true);
+//    mls.setUpsamplingMethod(MovingLeastSquares<PointXYZ, PointNormal>::SAMPLE_LOCAL_PLANE);
+//    mls.setUpsamplingRadius(20);
+//    mls.setPolynomialFit (true);
+//    mls.setSearchMethod (treeMLS);
+//    mls.setSearchRadius (25.3);
+//
+//    // Reconstruct
+//    mls.process (*mls_points);
+
+    // Normal estimation*
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n;
+    pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+    tree->setInputCloud (cloud_true);
+    n.setInputCloud (cloud_true);
+    n.setSearchMethod (tree);
+    n.setKSearch (50);
+    n.compute (*normals);
 
 
+    // Concatenate the XYZ and normal fields*
+    pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
+    pcl::concatenateFields (*cloud_true, *normals, *cloud_with_normals);
+    //* cloud_with_normals = cloud + normals
+
+    // Create search tree*
+    pcl::search::KdTree<pcl::PointNormal>::Ptr tree2 (new pcl::search::KdTree<pcl::PointNormal>);
+    tree2->setInputCloud (cloud_with_normals);
+
+    // Initialize objects
+    pcl::GreedyProjectionTriangulation<pcl::PointNormal> gp3;
+    pcl::PolygonMesh triangles;
+
+    // Set the maximum distance between connected points (maximum edge length)
+    gp3.setSearchRadius (25.5);
+
+    // Set typical values for the parameters
+    gp3.setMu(50);
+    gp3.setMaximumNearestNeighbors (200);
+    gp3.setMaximumSurfaceAngle(M_PI/4); // 45 degrees
+    gp3.setMinimumAngle(M_PI/6); // 10 degrees
+    gp3.setMaximumAngle(2 * M_PI/3); // 120 degrees
+    gp3.setNormalConsistency(false);
+
+    // Get result
+    gp3.setInputCloud (cloud_with_normals);
+    gp3.setSearchMethod (tree2);
+    gp3.reconstruct (triangles);
+
+//    NormalEstimationOMP<pcl::PointXYZ, Normal> ne;
+//    search::KdTree<PointXYZ>::Ptr tree1 (new search::KdTree<PointXYZ>);
+//    tree1->setInputCloud (cloud_true);
+//    ne.setInputCloud (cloud_true);
+//    ne.setSearchMethod (tree1);
+//    ne.setKSearch (20);
+//    PointCloud<Normal>::Ptr normals (new PointCloud<Normal>);
+//    ne.compute (*normals);
+//
+//    // Concatenate the XYZ and normal fields*
+//    PointCloud<PointNormal>::Ptr cloud_with_normals (new PointCloud<PointNormal>);
+//    concatenateFields(*cloud_true, *normals, *cloud_with_normals);
+//
+//    // Create search tree*
+//    search::KdTree<PointNormal>::Ptr tree (new search::KdTree<PointNormal>);
+//    tree->setInputCloud (cloud_with_normals);
+//
+//    cout << "begin marching cubes reconstruction" << endl;
+//
+//    MarchingCubesRBF<PointNormal> mc;
+//    PolygonMesh::Ptr triangles(new PolygonMesh);
+//    mc.setInputCloud (cloud_with_normals);
+//    mc.setGridResolution(100, 100, 100);
+//    mc.setSearchMethod (tree);
+//    mc.reconstruct (*triangles);
+//    cout << triangles->polygons.size() << " triangles created" << endl;
+
+    viewer.addPolygonMesh(triangles, "greedy polygon", 0);
 //    // add points
-    viewer.addPointCloud<pcl::PointXYZRGB>(cloud_true.makeShared(), green, "true points");
+    viewer.addPointCloud<pcl::PointXYZ>(cloud_true->makeShared(), "true points");
+//    viewer.addPointCloud<pcl::PointNormal>(mls_points->makeShared(), "mls points");
     viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "true points");
 
     viewer.spin();

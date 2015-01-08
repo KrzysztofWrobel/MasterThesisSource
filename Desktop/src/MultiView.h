@@ -48,6 +48,7 @@ void getTranslationWithKnownRotation(vector<Point2d> &prev_points_raw, vector<Po
 void findFundamentalStandard(vector<Point2d> &prev_points_raw, vector<Point2d> &next_points_raw, Mat &FStandard, uchar *&goodStatuses);
 
 void chooseProperRAndTFromTriangulation(vector<Point2d> &prev_points_raw, vector<Point2d> &next_points_raw, Mat &K, Mat &distCoeffs, Mat &R1, Mat &R2, Mat &t1, Mat &t2, Mat &R, Mat &T);
+void chooseProperMatrixFromEnhanced(Mat &dRx, Mat &dR1x, Mat &TdRExp, Mat &dR, Mat &T);
 
 #define EPSILON 0.0001
 

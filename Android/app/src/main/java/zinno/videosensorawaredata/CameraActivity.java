@@ -320,7 +320,7 @@ public class CameraActivity extends Activity implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor == mOrientation) {
-            float[] orientation = rotationVectorAction(event.values);
+            float[] orientation = euclidanAnglesFromQuaternion(event.values);
 
             float azimuth_angle = (float) Math.toDegrees(orientation[0]);
             float pitch_angle = (float) Math.toDegrees(orientation[1]);
@@ -451,10 +451,10 @@ public class CameraActivity extends Activity implements SensorEventListener {
         return output;
     }
 
-    private float[] rotationVectorAction(float[] values) {
+    private float[] euclidanAnglesFromQuaternion(float[] quaternion) {
         float[] orientation = new float[3];
         float[] rotMat = new float[16];
-        SensorManager.getRotationMatrixFromVector(rotMat, values);
+        SensorManager.getRotationMatrixFromVector(rotMat, quaternion);
         Matrix.invertM(invertedActualMatrix, 0, rotMat, 0);
         SensorManager.remapCoordinateSystem(rotMat, SensorManager.AXIS_MINUS_Z, SensorManager.AXIS_MINUS_X, rotMat);
         SensorManager.getOrientation(rotMat, orientation);
