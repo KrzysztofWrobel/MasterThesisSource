@@ -1,0 +1,153 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000">
+
+    <zinno.videosensorawaredata.CameraSurface
+        android:id="@+id/sv_camera_surface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:background="#000">
+
+        <TextView
+            android:id="@+id/tv_yaw"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_pitch"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_roll"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ll_accel_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="#000">
+
+        <TextView
+            android:id="@+id/tv_accel_globalX"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_accel_globalY"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_accel_globalZ"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ll_veloci_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/ll_accel_group"
+        android:background="#000">
+
+        <TextView
+            android:id="@+id/tv_veloci_globalX"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_veloci_globalY"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_veloci_globalZ"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ll_pos_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/ll_veloci_group"
+        android:background="#000">
+
+        <TextView
+            android:id="@+id/tv_pos_globalX"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_pos_globalY"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+
+        <TextView
+            android:id="@+id/tv_pos_globalZ"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+        <TextView
+            android:id="@+id/tv_steps"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:textColor="#FFFFFFFF"
+            />
+    </LinearLayout>
+    <Button
+        android:id="@+id/b_reset"
+        android:layout_centerHorizontal="true"
+        android:layout_above="@id/ll_pos_group"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="RESET"/>
+
+</RelativeLayout>
